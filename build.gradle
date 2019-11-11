@@ -1,0 +1,75 @@
+plugins {
+  id 'application'
+  id 'com.github.johnrengelman.shadow' version '2.0.2'
+  id 'com.bmuschko.docker-java-application' version '4.2.0'
+}
+apply plugin: 'com.bmuschko.docker-java-application'
+
+repositories {
+  jcenter()
+  mavenCentral()
+  mavenLocal()
+}
+
+version = '1.0-SNAPSHOT'
+sourceCompatibility = '1.8'
+targetCompatibility = '1.8'
+mainClassName = 'io.vertx.core.Launcher'
+
+def mainVerticleName = 'org.jboss.echoapi.EchoService'
+def watchForChange = 'src/**/*'
+def doOnChange = './gradlew classes'
+
+test {
+   useJUnitPlatform ()
+   include '**/EchoServiceJITest.class'
+}
+
+dependencies {
+  compile "io.vertx:vertx-core:$vertxVersion"
+  compile "io.vertx:vertx-web:$vertxVersion"
+  compile "io.vertx:vertx-web-client:$vertxVersion"
+  compile "org.junit.jupiter:junit-jupiter-api:${jupiterVersion}"
+  
+  testCompile "io.vertx:vertx-junit5:$vertxVersion"
+  testCompile "org.assertj:assertj-core:$assertjVersion"
+  
+  testRuntime "org.junit.jupiter:junit-jupiter-engine:$jupiterVersion"
+  testCompile "org.junit.jupiter:junit-jupiter:$jupiterVersion"
+  testCompile "org.junit.jupiter:junit-jupiter-api:$jupiterVersion"
+}
+
+shadowJar {
+  classifier = 'fat'
+  mainClassName = 'io.vertx.core.Launcher'
+  manifest {
+      attributes "Main-Verticle": mainVerticleName
+  }
+  mergeServiceFiles {
+    include 'META-INF/services/io.vertx.core.spi.VerticleFactory'
+  }
+}
+
+startScripts {
+   defaultJvmOpts = ['-XX:+UnlockExperimentalVMOptions', '-XX:+UseCGroupMemoryLimitForHeap', '-Dvertx.disableFileCPResolving=true']
+}
+
+run {
+  args = ['run', mainVerticleName, "--redeploy=$watchForChange", "--launcher-class=$mainClassName", "--on-redeploy=$doOnChange", '-Dvertx.disableFileCPResolving=true']
+}
+
+dockerDistTar {
+   instruction 'HEALTHCHECK CMD curl -f http://localhost:8080/health || exit 1'
+}
+
+docker {
+  javaApplication {
+    baseImage = 'openjdk:8u181-jre-slim'
+    maintainer = 'Jeremy Whiting'
+    ports = [8099]
+    tag = "docker-registry.default.svc:5000/3scaleperf/echoapp:" + version  
+    exec {
+       defaultCommand "/echo-api/bin/echo-api","run",mainVerticleName,'-Dvertx.disableFileCPResolving=true'
+    }
+  }
+}

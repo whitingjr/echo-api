@@ -1,0 +1,48 @@
+name: 3scale-benchmark
+agents:
+{% for agent in groups[hyperfoil_agent_group] %}
+  {{ agent }}: {{ hostvars[agent]['ansible_host'] }}:{{ hyperfoil_agent_port }}
+{% endfor %}
+http:
+  INSERT_HOSTS_LIST_HERE
+phases:
+- rampUp:
+    rampPerSec:
+      initialUsersPerSec: 1
+      targetUsersPerSec: INSERT_RAMP_UP_USERS_HERE
+      duration: INSERT_RAMP_UP_DURATION_HERE
+      scenario: &scenario
+        initialSequences:
+        - testSequence:
+          - randomCsvRow:
+             file: INSERT_CSV_FILE_PATH_HERE
+             skipComments: true
+             removeQuotes: true
+             columns:
+               0: target-host
+               1: uri
+          - template:
+              pattern: INSERT_PATTERN_HERE
+              toVar: target-authority
+          - httpRequest:
+              authority:
+                fromVar: target-authority
+              GET:
+                fromVar: uri
+              headers:
+                HOST:
+                  fromVar: target-host
+- steadyState:
+    constantPerSec:
+      usersPerSec: INSERT_STEADY_STATE_USERS_HERE
+      duration: INSERT_STEADY_STATE_DURATION_HERE
+      startAfter: rampUp
+      scenario: *scenario
+- rampDown:
+    constantPerSec:
+      usersPerSec: INSERT_STEADY_STATE_USERS_HERE
+      duration: INSERT_RAMP_DOWN_DURATION_HERE
+      startAfterStrict:
+        - rampUp
+        - steadyState
+      scenario: *scenario
